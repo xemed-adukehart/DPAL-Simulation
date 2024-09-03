@@ -1,151 +1,155 @@
 #!/usr/bin/env python
 """
-Created on Fri Jul 19, 2024
+Created on Fri Aug 30 15:52:57 2024
 
 @author: adukehart
 """
 
+# Import Necessary Packages
 import time
+import argparse
 import Modules.FrameClass as fc
 import Modules.BeamClass as bc
 import Modules.ObjectClass as oc
 import random as rand
-from prettytable import PrettyTable
-import matplotlib.pyplot as plt
+from Utils.file_utils import readFile, writeFile
+from Utils.datetime_utils import formatDate, getCurrentDate
 from Modules.Collision import CollisionDetection
 
-rand.seed(10)
+rand.seed(10)   # For consistency, not necessary
 
 def main():
-    timer_start = time.perf_counter()
+    # A test of argument parser feature
+    parser = argparse.ArgumentParser(description='Run a DPAL Simulation')
+    parser.add_argument('-v', '--verbose', action='store_true')
+    args = parser.parse_args()
     
-    # Set Simulation Parameters
-    results = {}
-    run_num = 1
-    total_runs = 1
-    time_step = 0.0000001                                           # in sec
+    # Create Results output file
+    date = formatDate(getCurrentDate())
+    results_file_name = date + "Results.txt"
+    results_file = open(results_file_name, 'a')
+    
+    # Create Location Data output file
+    location_file_name = date + "Location_Data.log"
+    location_file = open(location_file_name, 'a')
+    location_file.write("# Time, Beam Location, Object Location")
+    
+    # SIMULATION PARAMETERS
+    run_num = 1                                          # Fixed, DO NOT CHANGE
+    results = {}                                         # Fixed, DO NOT CHANGE
+    time_step = 0.000001            # Adjustable argument, in seconds
+    total_runs = 1                  # Adjustable argument
     
     # Set Frame configuration
-    frame = fc.Frame(3000, 3000)                                    # in meters
+    frame = fc.Frame(3000, 3000)                                # UNITS: meters
     fov = frame.make_fov(1/3)
     
-    # Set Beam Configuration
-    beam_size = 2                                                   # in meters
-    beam_init_position = fov.get_center()
-    circ_r = 304.88                                                 # in meters
-    xy_r = 195.12                                                   # in meters
-    circ_omega = 23230                                              # in Hz
-    xy_omega = [2305, 990]                                          # in Hz
-    beam = bc.Beam(beam_size, beam_init_position, 
-                   circ_r, xy_r, 
-                   circ_omega, xy_omega)
+    # Set Default Beam Configuration
+    # NEED TO SET UP PUNCH CARD CONFIGURATION AND READ IN
+    beam_size = 2                                               # UNITS: meters
+    beam_init_position = fov.get_center()                       # UNITS: meters
+    circ_r = 304.88                                             # UNITS: meters
+    xy_r = 195.12                                               # UNITS: meters
+    circ_omega = 23230                                          # UNITS: Hz
+    xy_omega = [2305, 990]                                      # UNITS: Hz
+    beam = bc.Beam(beam_size, 
+                   beam_init_position, 
+                   circ_r, 
+                   xy_r, 
+                   circ_omega, 
+                   xy_omega)
+    # Write beam configuration to Results.txt
+    results_file.write(f"RESULTS FOR {date} SIMULATION")
+    results_file.write("\n")
+    results_file.write("\n** BEAM PROPERTIES **")
+    results_file.write(f"\n    -- Beam Width:                          {beam_size} m")
+    results_file.write(f"\n    -- Beam Starting Position:              [{round(beam_init_position[0],2)}, {round(beam_init_position[1],2)}] m")
+    results_file.write(f"\n    -- Circular Raster Radius:              {circ_r} m")
+    results_file.write(f"\n    -- XY Raster Radius:                    {xy_r} m")
+    results_file.write(f"\n    -- Circular Raster Angular Velocity:    {circ_omega} Hz")
+    results_file.write(f"\n    -- XY Raster Angular Velocity:          {xy_omega} Hz")
 
-    print("")
-    print("** BEAM PROPERTIES **")
-    print(f"    -- Beam Width:                          {beam_size} m")
-    print(f"    -- Beam Starting Position:              [{round(beam_init_position[0],2)}, {round(beam_init_position[1],2)}] m")
-    print(f"    -- Circular Raster Radius:              {circ_r} m")
-    print(f"    -- XY Raster Radius:                    {xy_r} m")
-    print(f"    -- Circular Raster Angular Velocity:    {circ_omega} Hz")
-    print(f"    -- XY Raster Angular Velocity:          {xy_omega} Hz")
-    print("")
+    # MAIN SIMULAITON
+    print(f"Starting Simulation: {total_runs} runs")
+    main_timer_start = time.perf_counter()
     
-    # Main Simulation
     while run_num < total_runs+1:
-        run_Timer = time.perf_counter()
         
+        # Set up parameters and detection data
         beam.Time = 0
+        hit_time = []
+        hit_counter = 0
         
-        # Record Detection Data
-        beam_loc = []
-        ob_loc = []
-        hit_time= []
+        results_file.write("\n")
+        results_file.write("\n--------------------------------------------------------------")
+        results_file.write(f"\nStarting Run {run_num}")
         
-        print("--------------------------------------------------------------")
-        print(f"Starting Run {run_num}")
-        print("")
-        
-        hit_counts = 0
-        
-        # Set Object configuration
+        # Set Object Configuration
+        # NEED TO SET UP PUNCH CARDS AND READ IN?
         ob_diameter = 0.18                                          # in meters
         ob_reflectance = 1                                      # unknown units
         ob_altitude = 500000                                        # in meters
-        ob_init_position, ob_velocity = oc.TrajectoryGenerator(frame, fov,
-                                                              7650, 22.5, 
+        ob_init_position, ob_velocity = oc.TrajectoryGenerator(frame, 
+                                                               fov,
+                                                              7650, 
+                                                              22.5, 
                                                               ob_altitude)
         ob = oc.Object(ob_diameter, ob_init_position, ob_velocity, 
                        ob_reflectance, ob_altitude)
-        print("** OBJECT PROPERTIES **")
-        print(f"    -- Object Diameter:     {ob_diameter*100} cm")
-        print(f"    -- Initial Position:    [{round(ob_init_position[0],2)},{round(ob_init_position[1],2)}] m")
-        print(f"    -- Object Velocity:     [{round(ob_velocity[0],2)},{round(ob_velocity[1],2)}] m/s")
-        print(f"    -- Object Reflectance: {ob_reflectance}")
-        print(f"    -- Object Altitude:     {ob_altitude} m")
-        print("")
-        
-        n = 0
-        t = 0
+        # Write object configuration results to Results.txt
+        results_file.write("\n")
+        results_file.write("\n** OBJECT PROPERTIES **")
+        results_file.write(f"\n    -- Object Diameter:     {ob_diameter*100} cm")
+        results_file.write(f"\n    -- Initial Position:    [{round(ob_init_position[0],2)},{round(ob_init_position[1],2)}] m")
+        results_file.write(f"\n    -- Object Altitude:     {ob_altitude} m")
+        results_file.write(f"\n    -- Object Velocity:     [{round(ob_velocity[0],2)},{round(ob_velocity[1],2)}] m/s")
+        results_file.write(f"\n    -- Object Reflectance: {ob_reflectance}")
+    
         sim_flags = fc.BoundaryFlags(ob.position, fov, 2)
+        run_timer_start = time.perf_counter()
         
+        print(f"Starting Run {run_num}")
+        location_file.write(f"\n# RUN {run_num}")
         while sim_flags[1] == False:
+            
             ob.move(time_step)
             beam.move(time_step, fov)
-            if t%1000 == 0:
-                xmin, xmax, ymin, ymax = fov.get_axis()
-                fig, ax = plt.subplots()
-                fig.suptitle(f'Field of View: t = {t}s')
-                ax.set_xlim((xmin, xmax))
-                ax.set_ylim((ymin, ymax))
-                ax.tick_params(axis='both', which='both',
-                                   bottom=False,
-                                   left=False,
-                                   labelbottom=False,
-                                   labelleft=False)
-                ax.set_aspect('equal')
-                ob.render(ax)
-                beam.render(ax)
-                fig.savefig(f'frame_{n}')
             
             if CollisionDetection(beam, ob) == True:
-                beam_loc.append([round(beam.position[0],3), 
-                                 round(beam.position[1],3)])
-                ob_loc.append([round(ob.position[0],3), 
-                               round(ob.position[1], 3)])
-                hit_time.append(round(beam.Time, 2))
-                hit_counts += 1
-            n += 1
-            t += 1
-            sim_flags = fc.BoundaryFlags(ob.position, fov, 2, sim_flags)
+                hit_time.append(beam.Time)
+                hit_counter += 1
+                
+            location_file.write(f"\n{beam.Time}, {beam.position}, {ob.position}")
             
-        elapsed_time_run = round((time.perf_counter() - run_Timer), 2)
+            sim_flags = fc.BoundaryFlags(ob.position, fov, 2, sim_flags)
         
-        table = PrettyTable()
-        table.field_names = ['Beam Local', 'Object Local', 'Time']
-        for i in range(len(hit_time)):
-            table.add_row([beam_loc[i], ob_loc[i], hit_time[i]])
+        # Process Run results
+        elapsed_run_time = round((time.perf_counter() - run_timer_start), 3)
         
-        print("** RUN RESULTS **")
-        print(f"    -- Number of Detections:     {hit_counts}")
-        print(f"    -- Run Time:                 {elapsed_time_run}")
-        print("")
-        print("    -- List of Detections:")
-        print(table)
-        print("")
+        results_file.write("\n")
+        results_file.write("\n** RUN RESULTS **")
+        results_file.write(f"\n    -- Run Time:                 {elapsed_run_time}")
+        results_file.write(f"\n    -- Number of Detections:     {hit_counter}")
+        results_file.write("\n    -- Detection Times:")
+        for t in hit_time:
+            results_file.write(f"\n        {t}")
         
-        results.update({f"Run {run_num}": hit_counts})
         run_num += 1
-        
-    print("------------------------------------------------------------------")
-        
-    elapsed_time = round((time.perf_counter() - timer_start), 2)
-    # ADD MEMORY USAGE DATA
-        
-    print("** FINAL RESULTS **")
-    print(f"Simulation Time:    {elapsed_time} s")
-    # print(f"Memory Usage:       {memMb} MB")
-    print(results)
-        
     
+    print("Ending Simulation")
+    location_file.close()
+    
+    elapsed_main_time = round((time.perf_counter() - main_timer_start), 2)    
+    
+    results_file.write("\n")
+    results_file.write("\n------------------------------------------------------------------")
+    results_file.write("\n** FINAL RESULTS **")
+    results_file.write(f"\nSimulation Time:    {elapsed_main_time} s")
+    # print(f"Memory Usage:       {memMb} MB")
+    if args.verbose == True:
+        print("You've discovered the secret!")
+    
+    results_file.close()
+        
 if __name__=="__main__":
     main()
