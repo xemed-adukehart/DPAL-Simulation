@@ -7,41 +7,31 @@ Created on Fri Aug 30 15:52:57 2024
 
 # Import Necessary Packages
 import time
-import argparse
-import Modules.FrameClass as fc
-import Modules.BeamClass as bc
-import Modules.ObjectClass as oc
+import numpy as np
+import pandas as pd
 import random as rand
-from Utils.file_utils import readFile, writeFile
+
+from BeamPackage import Beam
+from ClockPackage import Clock
+from FramePackage import Frame, BoundaryFlags
+from ObjectPackage import MultiObjectGenerator, MoveObjects
+from Utils.Collision import CollisionDetection
 from Utils.datetime_utils import formatDate, getCurrentDate
-from Modules.Collision import CollisionDetection
 
 rand.seed(10)   # For consistency, not necessary
 
 def main():
-    # A test of argument parser feature
-    parser = argparse.ArgumentParser(description='Run a DPAL Simulation')
-    parser.add_argument('-v', '--verbose', action='store_true')
-    args = parser.parse_args()
-    
     # Create Results output file
     date = formatDate(getCurrentDate())
     results_file_name = date + "Results.txt"
     results_file = open(results_file_name, 'a')
     
-    # Create Location Data output file
-    location_file_name = date + "Location_Data.log"
-    location_file = open(location_file_name, 'a')
-    location_file.write("# Time, Beam Location, Object Location")
-    
     # SIMULATION PARAMETERS
     run_num = 1                                          # Fixed, DO NOT CHANGE
-    results = {}                                         # Fixed, DO NOT CHANGE
-    time_step = 0.000001            # Adjustable argument, in seconds
-    total_runs = 1                  # Adjustable argument
+    total_runs = 1                                        # Adjustable argument
     
     # Set Frame configuration
-    frame = fc.Frame(3000, 3000)                                # UNITS: meters
+    frame = Frame(3000, 3000)                                   # UNITS: meters
     fov = frame.make_fov(1/3)
     
     # Set Default Beam Configuration
@@ -52,13 +42,11 @@ def main():
     xy_r = 195.12                                               # UNITS: meters
     circ_omega = 23230                                          # UNITS: Hz
     xy_omega = [2305, 990]                                      # UNITS: Hz
-    beam = bc.Beam(beam_size, 
-                   beam_init_position, 
-                   circ_r, 
-                   xy_r, 
-                   circ_omega, 
+    beam = Beam(beam_size, beam_init_position, circ_r, xy_r, circ_omega, 
                    xy_omega)
+    
     # Write beam configuration to Results.txt
+    '''
     results_file.write(f"RESULTS FOR {date} SIMULATION")
     results_file.write("\n")
     results_file.write("\n** BEAM PROPERTIES **")
@@ -68,76 +56,86 @@ def main():
     results_file.write(f"\n    -- XY Raster Radius:                    {xy_r} m")
     results_file.write(f"\n    -- Circular Raster Angular Velocity:    {circ_omega} Hz")
     results_file.write(f"\n    -- XY Raster Angular Velocity:          {xy_omega} Hz")
+    '''
+    clock = Clock()
 
     # MAIN SIMULAITON
     print(f"Starting Simulation: {total_runs} runs")
     main_timer_start = time.perf_counter()
     
     while run_num < total_runs+1:
-        
         # Set up parameters and detection data
-        beam.Time = 0
-        hit_time = []
-        hit_counter = 0
+        clock.reset()
         
         results_file.write("\n")
         results_file.write("\n--------------------------------------------------------------")
         results_file.write(f"\nStarting Run {run_num}")
         
         # Set Object Configuration
-        # NEED TO SET UP PUNCH CARDS AND READ IN?
-        ob_diameter = 0.18                                          # in meters
-        ob_reflectance = 1                                      # unknown units
-        ob_altitude = 500000                                        # in meters
-        ob_init_position, ob_velocity = oc.TrajectoryGenerator(frame, 
-                                                               fov,
-                                                              7650, 
-                                                              22.5, 
-                                                              ob_altitude)
-        ob = oc.Object(ob_diameter, ob_init_position, ob_velocity, 
-                       ob_reflectance, ob_altitude)
-        # Write object configuration results to Results.txt
-        results_file.write("\n")
-        results_file.write("\n** OBJECT PROPERTIES **")
-        results_file.write(f"\n    -- Object Diameter:     {ob_diameter*100} cm")
-        results_file.write(f"\n    -- Initial Position:    [{round(ob_init_position[0],2)},{round(ob_init_position[1],2)}] m")
-        results_file.write(f"\n    -- Object Altitude:     {ob_altitude} m")
-        results_file.write(f"\n    -- Object Velocity:     [{round(ob_velocity[0],2)},{round(ob_velocity[1],2)}] m/s")
-        results_file.write(f"\n    -- Object Reflectance: {ob_reflectance}")
-    
-        sim_flags = fc.BoundaryFlags(ob.position, fov, 2)
+        objects = MultiObjectGenerator(3, frame, fov)
+        
+        hits = {}
+        for ob in objects:
+            hits[ob] = 0
+        
+        # Initialize boundary flag vector
+        enter_flags = BoundaryFlags(objects, fov, 2, EntorEx=0)
+        exit_flags = BoundaryFlags(objects, fov, 2, EntorEx=1)
+        
         run_timer_start = time.perf_counter()
         
-        print(f"Starting Run {run_num}")
-        location_file.write(f"\n# RUN {run_num}")
-        while sim_flags[1] == False:
-            
-            ob.move(time_step)
-            beam.move(time_step, fov)
-            
-            if CollisionDetection(beam, ob) == True:
-                hit_time.append(beam.Time)
-                hit_counter += 1
-                
-            location_file.write(f"\n{beam.Time}, {beam.position}, {ob.position}")
-            
-            sim_flags = fc.BoundaryFlags(ob.position, fov, 2, sim_flags)
+        # Initialize DataFrame
+        headers = ['Simulation Time', 'Beam Location']
+        for ob in objects:
+            headers.append(f'{ob.id} Location')
+        df = pd.DataFrame(columns=headers)
         
+        print(f"Starting Run {run_num}")
+       
+        while (np.linalg.norm(exit_flags) != np.sqrt(len(exit_flags))):
+            while (np.linalg.norm(enter_flags) == 0):
+                time_step = 0.001
+                beam.move(time_step, fov)
+                objects = MoveObjects(objects, time_step)
+                clock.tick(time_step)
+                
+                enter_flags = BoundaryFlags(objects, fov, 2, EntorEx=0)
+                exit_flags = BoundaryFlags(objects, fov, 2, EntorEx=1)
+                 
+            time_step = 0.000001
+                
+            beam.move(time_step, fov)
+            row = [clock.Time, beam.position]
+
+            objects, row = MoveObjects(objects, time_step, record=row)
+            clock.tick(time_step)
+                
+            if CollisionDetection(beam, ob) == True:
+                new_fov = fov.shift(ob.position[0], ob.position[1])
+                new_flags = BoundaryFlags(objects, new_fov, 2, EntorEx=1)
+                
+
+                break
+                
+            df.loc[len(df)] = row
+            exit_flags = BoundaryFlags(objects, fov, 2, EntorEx=1)
+                
+
         # Process Run results
         elapsed_run_time = round((time.perf_counter() - run_timer_start), 3)
         
         results_file.write("\n")
         results_file.write("\n** RUN RESULTS **")
         results_file.write(f"\n    -- Run Time:                 {elapsed_run_time}")
-        results_file.write(f"\n    -- Number of Detections:     {hit_counter}")
-        results_file.write("\n    -- Detection Times:")
-        for t in hit_time:
-            results_file.write(f"\n        {t}")
+        for ob in objects:
+            results_file.write(f"\n    -- {ob.id} Detections:     {ob.num_hits}")
         
+        df.to_csv(date + f' Run {run_num} of {total_runs} Data.csv')
+        
+        print(f"Ending run {run_num} of {total_runs}")
         run_num += 1
     
     print("Ending Simulation")
-    location_file.close()
     
     elapsed_main_time = round((time.perf_counter() - main_timer_start), 2)    
     
@@ -146,9 +144,6 @@ def main():
     results_file.write("\n** FINAL RESULTS **")
     results_file.write(f"\nSimulation Time:    {elapsed_main_time} s")
     # print(f"Memory Usage:       {memMb} MB")
-    if args.verbose == True:
-        print("You've discovered the secret!")
-    
     results_file.close()
         
 if __name__=="__main__":

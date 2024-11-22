@@ -16,7 +16,7 @@ from .datetime_utils import formatDate, getCurrentDate
 __all__ = ['readFile',
            'writeFile', 
            'formatDate',
-           'getCurrentDate']
+           'getCurrentDate',]
 
 # Define version number
 __version__ = '0.0.1'
