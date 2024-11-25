@@ -34,7 +34,6 @@ class Objects:
             x_cond = x_min < self._positions[i][0] < x_max
             y_cond = y_min < self._positions[i][1] < y_max
             if x_cond == True and y_cond == True and self.enter_flags[i] == 0:
-                print("Object ", i, " has entered the frame")
                 self.enter_flags[i] = 1
             elif (x_cond == False or y_cond == False) and self.enter_flags[i] == 1:
                 self.exit_flags[i] = 1
