@@ -6,16 +6,16 @@ Created on Fri Nov 22 14:33:28 2024
 """
 
 import numpy as np
-from .Modules import CRaster, XYRaster
+from .Modules import  Raster
 
 class Beam:
-    def __init__(self, Size=0, R_circ=0, R_xy=0, ω_circ=0, ω_xy=np.zeros(2)):
+    def __init__(self, Size=0, R1=0, R2=0, ω1=0, ω2=0):
         self._time = 0
         self.size = Size
-        self.r_circ = R_circ
-        self.r_xy = R_xy
-        self.ω_circ = ω_circ
-        self.ω_xy = ω_xy
+        self.r1 = R1
+        self.r2 = R2
+        self.ω1 = ω1
+        self.ω2 = ω2
         self._position = np.zeros(2)
 
     @property
@@ -23,20 +23,20 @@ class Beam:
         return self._size
 
     @property
-    def r_circ(self) -> float:
-        return self._r_circ
+    def r1(self) -> float:
+        return self._r1
 
     @property
-    def r_xy(self) -> float:
-        return self._r_xy
+    def r2(self) -> float:
+        return self._r2
 
     @property
-    def ω_circ(self) -> float:
-        return self._ω_circ
+    def ω1(self) -> float:
+        return self._ω1
 
     @property 
-    def ω_xy(self) -> np.array:
-        return self._ω_xy
+    def ω2(self) -> np.array:
+        return self._ω2
 
     @size.setter
     def size(self, value):
@@ -44,38 +44,39 @@ class Beam:
             raise ValueError("Size cannot be negative")
         self._size = value
 
-    @r_circ.setter
-    def r_circ(self, value):
+    @r1.setter
+    def r1(self, value):
         if value < 0:
             raise ValueError("Radius cannot be negative")
-        self._r_circ = value
+        self._r1 = value
         
-    @r_xy.setter
-    def r_xy(self, value):
+    @r2.setter
+    def r2(self, value):
         if value < 0:
             raise ValueError("Radius cannot be negative")
-        self._r_xy = value
+        self._r2 = value
 
-    @ω_circ.setter
-    def ω_circ(self, value):
-        self._ω_circ = value
+    @ω1.setter
+    def ω1(self, value):
+        self._ω1 = value
 
-    @ω_xy.setter
-    def ω_xy(self, value):
-        if value.size != 2:
-            raise ValueError("Parameter must be a vector of length 2")
-        self._ω_xy = value
+    @ω2.setter
+    def ω2(self, value):
+        self._ω2 = value
 
     def get_position(self) -> np.array:
         return tuple(self._position)
+    
+    def reset(self):
+        self._time = 0
+        self._position = np.zeros(2)
+        
 
     def move(self, dt, frame=None):
         if frame is None:
-            self._position = (CRaster(self._time, self.r_circ, self.ω_circ)
-                              + XYRaster(self._time, self.r_xy, self.ω_xy))
+            self._position = Raster(self._time, self.r1, self.r2, self.ω1, self.ω2)
             self._time += dt
         else:
-            self._position = ((frame[:][0] + frame[:][1])/2
-                              + CRaster(self._time, self.r_circ, self.ω_circ)
-                              + XYRaster(self._time, self.r_xy, self.ω_xy))
+            self._position = ((frame[:][0] - frame[:][1])/2
+                              + Raster(self._time, self.r1, self.r2, self.ω1, self.ω2))
             self._time += dt

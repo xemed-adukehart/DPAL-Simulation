@@ -7,36 +7,31 @@ Created on Fri Jul 19, 2024
 
 import numpy as np
 
-def CollisionDetection(beam, objects):
+def Detect(beam, objects):
     '''
-    Generates a hash map where the values are the number of collisions between
-    the beam and and object
+    A check to see if the center of the object is within a beam radius of the
+    center of the beam.
 
     Parameters
     ----------
-    beam : TYPE
-        DESCRIPTION.
-    objects : TYPE
-        DESCRIPTION.
+    beam : Beam
+        An instance of the Beam class.
+    objects : Objects
+        An instance of the Objects class.
 
     Returns
     -------
-    bool
-        DESCRIPTION.
+    np.array
+        An array of bools where True means a collision between the beam and the
+        ith object has been detected and False meaning no collision has been
+        detected.
 
     '''
-    hits = {}
-    for ob in objects:
-        hits[ob] = 0
-        
-    beam_size = beam.size
-    for ob in objects:
-        ob_r = ob.diameter/2
-    
-        diff = ob.position[:1] - beam.position
-        distance = np.sqrt(diff.dot(diff))
-    
-        if distance <= (ob_r + beam_size):
-            hits[ob] += 1
-    
-    return hits
+    object_list = []
+    for row in objects.get_positions():
+        vec = np.subtract(beam.get_position(), row[:2])
+        if np.sqrt(vec.dot(vec)) < beam.size:
+            object_list.append(True)
+        else:
+            object_list.append(False)
+    return np.array(object_list)

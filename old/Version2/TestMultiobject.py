@@ -10,7 +10,7 @@ import pylab as pl
 from FramePackage import Frame, BoundaryFlags
 from ObjectPackage import MultiObjectGenerator
 
-pl.matplotlib.use('Qt5Agg')
+#pl.matplotlib.use('Qt5Agg')
 
 time_step = 0.001
 
